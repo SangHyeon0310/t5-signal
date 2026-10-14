@@ -24,3 +24,6 @@ ntfy를 쓰려면 `NTFY_TOPIC` Secret에 추측하기 어려운 주제 이름을
 ## 텔레그램 명령 (다음 정시 실행 때 답함)
 - `/status`: 현재 금·코인 목표 비중
 - `/perf`: 클라우드 기록 시작 이후 신호를 따랐다면의 가상 수익(비용 제외)과 단순 보유 비교. 매주 일요일 07시(KST)에도 자동 발송
+
+## Laptop auto update (ST-TRA / T5)
+`laptop/auto_update.ps1`: one-time Git setup, then daily `git pull` of both private repos (task `ST-AutoUpdate`). No secrets in this file.
