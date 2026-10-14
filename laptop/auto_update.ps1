@@ -44,9 +44,12 @@ if (-not $Git) {
     if (-not $Git) { Say "Git install failed. Install from https://git-scm.com/download/win and run again." "Red"; exit 1 }
 }
 Say ("git: " + $Git)
-# D: may be exFAT/FAT32 (no owner info): allow these folders so git does not refuse them.
-$safe = @(& $Git config --global --get-all safe.directory)
-if ($safe -notcontains "*") { & $Git config --global --add safe.directory "*" }
+# D: may be exFAT/FAT32 (no owner info): trust only our own checkout folders, one by one.
+function Trust-Dir([string]$d) {
+    $norm = $d -replace '\\', '/'
+    $safe = @(& $Git config --global --get-all safe.directory)
+    if ($safe -notcontains $norm) { & $Git config --global --add safe.directory $norm }
+}
 
 # ---- 2. Repos ----
 function Find-Folder([string]$marker, [string]$venv, [string[]]$roots) {
@@ -78,6 +81,7 @@ foreach ($r in $Repos) {
     if (-not $dir) { $dir = $r.Default; Say ("  " + $r.Name + " not found; fresh copy (run its SETUP once)") "Yellow" }
     if ($r.Name -eq "ST-TRA") { $TraDir = $dir }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    Trust-Dir $dir
     Say ("[" + $r.Name + "] " + $dir) "Cyan"
     $reqFile = Join-Path $dir $r.Req
     $reqBefore = if (Test-Path $reqFile) { (Get-FileHash $reqFile).Hash } else { "" }
