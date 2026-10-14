@@ -1,0 +1,40 @@
+# Free hourly gold signal for the phone (no orders, no broker login). See README.md.
+name: t5-signal
+on:
+  schedule:
+    - cron: "7 * * * *"          # every hour at :07 UTC (4h bars close at 00/04/08/12/16/20 UTC)
+  workflow_dispatch: {}
+permissions:
+  contents: write                 # only to save the small state file on the t5-signal-state branch
+concurrency:
+  group: t5-signal
+  cancel-in-progress: false
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load previous state
+        run: |
+          git fetch origin t5-signal-state:t5-signal-state 2>/dev/null && git show t5-signal-state:state.json > /tmp/state.json || echo "no previous state"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-cloud.txt
+      - run: pip install -q -r requirements-cloud.txt
+      - name: Compute and notify
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python tools/t5_cloud_signal.py --state /tmp/state.json
+      - name: Save state
+        run: |
+          git config user.name "t5-signal"
+          git config user.email "t5-signal@users.noreply.github.com"
+          d=$(mktemp -d); cp /tmp/state.json "$d/state.json"
+          cd "$d" && git init -q && git checkout -q -b t5-signal-state && git add state.json
+          git commit -q -m "state $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" t5-signal-state

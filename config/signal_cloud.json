@@ -1,0 +1,8 @@
+{
+  "equity_usd": 700.0,
+  "contract_size": 100.0,
+  "volume_min": 0.01,
+  "volume_step": 0.01,
+  "min_change": 0.10,
+  "heartbeat_utc_hour": 22
+}
