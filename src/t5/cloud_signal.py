@@ -81,12 +81,44 @@ def fetch_binance(symbol: str, hours: int = H1_COUNT + 2500, get=_get, now_ms: i
 CRYPTO = {"BTC": "BTCUSDT", "ETH": "ETHUSDT"}
 
 
-def st_tra_weight(b: pd.DataFrame) -> float:
+def st_tra_weights(b: pd.DataFrame) -> pd.Series:
     c = b["close"]
     fast, slow = E.ema(c, 20), E.ema(c, 200)
     sig = (fast > slow).astype(float)
     rv = np.log(c).diff().rolling(180).std() * np.sqrt(6 * 365)
-    return float((sig * (0.40 / rv).clip(upper=1.0)).fillna(0.0).iloc[-1])
+    return (sig * (0.40 / rv).clip(upper=1.0)).fillna(0.0)
+
+
+def st_tra_weight(b: pd.DataFrame) -> float:
+    return float(st_tra_weights(b).iloc[-1])
+
+
+# ---- display levels: derived from the same rules, they do not change any decision ----
+def ema_flip_level(c: pd.Series, fast: int = 20, slow: int = 200) -> float | None:
+    """Next 4h close at which EMA(fast) crosses EMA(slow): exit level while long, entry level while flat."""
+    a, b = 2 / (fast + 1), 2 / (slow + 1)
+    ef, es = float(E.ema(c, fast).iloc[-1]), float(E.ema(c, slow).iloc[-1])
+    x = ((1 - b) * es - (1 - a) * ef) / (a - b)
+    return x if np.isfinite(x) and x > 0 else None
+
+
+def donchian_levels(b: pd.DataFrame, entry_n: int = 240, exit_n: int = 30) -> dict:
+    """Donchian long state now, its exit level (exit_n low) and entry level (entry_n high) for the next bar."""
+    long_now = float(E.sig_donchian(b, entry_n, exit_n).iloc[-1]) > 0
+    return {"dc_long": long_now, "dc_exit": float(b["low"].iloc[-exit_n:].min()),
+            "dc_entry": float(b["high"].iloc[-entry_n:].max())}
+
+
+def entry_point(w: pd.Series, close: pd.Series) -> dict | None:
+    """Bar where the current holding started (weight went from 0 to > 0): price, time, weight then."""
+    on = (w > 0).to_numpy()
+    if not len(on) or not on[-1]:
+        return None
+    i = len(on) - 1
+    while i > 0 and on[i - 1]:
+        i -= 1
+    return {"entry_price": float(close.iloc[i]), "entry_ms": int(w.index[i]), "entry_weight": round(float(w.iloc[i]), 4),
+            "entry_before_window": bool(i == 0)}
 
 
 def compute_crypto(feeds: dict[str, pd.DataFrame], now_ms: int, budget_usdt: float) -> dict:
@@ -95,9 +127,11 @@ def compute_crypto(feeds: dict[str, pd.DataFrame], now_ms: int, budget_usdt: flo
         h = h[h.index + 3_600_000 <= now_ms].iloc[-H1_COUNT:]
         b = E.resample(h[["open", "high", "low", "close"]], "4h")
         b = b[b.index + E.TF_MS["4h"] <= now_ms]
-        w = st_tra_weight(b)
+        ws = st_tra_weights(b)
+        w = float(ws.iloc[-1])
         out[k] = {"weight": round(w, 4), "usdt": round(w * budget_usdt, 2), "price": float(b["close"].iloc[-1]),
-                  "bar_ms": int(b.index[-1])}
+                  "bar_ms": int(b.index[-1]), "ema_level": ema_flip_level(b["close"]),
+                  **(entry_point(ws, b["close"]) or {})}
     return out
 
 
@@ -108,19 +142,42 @@ def changed_crypto(prev: dict | None, cur: dict, min_change: float = 0.10) -> li
                                                         or abs(t["weight"] - prev[k]["weight"]) >= min_change)]
 
 
+def _kst(ms: int, fmt: str = "%m-%d %H시") -> str:
+    return pd.Timestamp(ms, unit="ms").tz_localize("UTC").tz_convert("Asia/Seoul").strftime(fmt)
+
+
+def _px(x: float | None, nd: int) -> str:
+    return "1봉 내 도달 불가" if x is None else f"{x:,.{nd}f}"
+
+
+def _entry_line(t: dict, price: float, nd: int) -> str:
+    if "entry_price" not in t:
+        return ""
+    when = "기록 이전" if t.get("entry_before_window") else _kst(t["entry_ms"] + E.TF_MS["4h"])
+    return f"진입가 {_px(t['entry_price'], nd)} ({when}) · {(price / t['entry_price'] - 1) * 100:+.1f}%"
+
+
 def format_crypto(cur: dict, prev: dict | None, keys: list[str], budget: float, title: str) -> str:
     any_bar = max(v["bar_ms"] for v in cur.values())
-    bar = pd.Timestamp(any_bar + E.TF_MS["4h"], unit="ms").tz_localize("UTC").tz_convert("Asia/Seoul")
-    lines = [f"[ST-TRA 코인] {title}", f"4시간봉 마감 {bar:%m-%d %H:%M} KST (Binance 시세)"]
+    lines = [f"[ST-TRA 코인] {title} · 4h 마감 {_kst(any_bar + E.TF_MS['4h'])}"]
     for k in keys or list(cur):
-        t = cur[k]
-        p = (prev or {}).get(k)
-        arrow = f"{p['weight'] * 100:.0f}% → " if p else ""
-        delta = f" ({'매수' if t['usdt'] > p['usdt'] else '매도'} 약 {abs(t['usdt'] - p['usdt']):,.0f} USDT)" if p and keys else ""
-        state = f"{t['usdt']:,.0f} USDT어치 보유" if t["weight"] > 0 else "보유 안 함(관망)"
-        lines.append(f"{k} {t['price']:,.0f}: 목표 {arrow}{t['weight'] * 100:.0f}% · {state}{delta}")
-    lines.append(f"(목표 % = 코인 예산 {budget:,.0f} USDT 중 들고 있을 비율, 수익 목표 아님. "
-                 "고정 목표가·손절가 없이 추세가 꺾이면 %를 낮추라는 매도 알림이 옵니다. 현물 · 주문은 거래소 앱에서 직접)")
+        t, p = cur[k], (prev or {}).get(k)
+        hold = t["weight"] > 0
+        head = f"■ {k} {'롱 보유' if hold else '관망'} · 목표 {t['weight'] * 100:.0f}%"
+        if p and keys:
+            d = t["usdt"] - p["usdt"]
+            head += f" · {'▲ 매수' if d > 0 else '▼ 매도'} {abs(d):,.0f} USDT"
+        lines.append(head)
+        if hold:
+            lines.append(f"현재가 {_px(t['price'], 0)} · {_entry_line(t, t['price'], 0)}")
+            amt = f"보유금액 {t['usdt']:,.0f} USDT"
+            if "entry_weight" in t:
+                amt += f" · 진입금액 {t['entry_weight'] * budget:,.0f} USDT"
+            lines.append(amt)
+            lines.append(f"손절가 {_px(t.get('ema_level'), 0)} (4h 종가 기준) · 목표가 없음")
+        else:
+            lines.append(f"현재가 {_px(t['price'], 0)} · 매수 진입가 {_px(t.get('ema_level'), 0)} 이상 (4h 종가)")
+    lines.append(f"예산 {budget:,.0f} USDT · 현물 롱 전용")
     return "\n".join(lines)
 
 
@@ -166,11 +223,17 @@ def compute(h1: pd.DataFrame, now_ms: int, acc: Account) -> dict:
     price = float(b["close"].iloc[-1])
     spec = SymbolSpec(acc.contract_size, acc.volume_min, acc.volume_step)
     out = {"bar_ms": int(b.index[-1]), "price": price, "targets": {}}
+    ema_level = ema_flip_level(b["close"])
+    ema_long = bool(E.ema(b["close"], 20).iloc[-1] > E.ema(b["close"], 200).iloc[-1])
+    dc = donchian_levels(b)
     for k, name in STRATEGIES.items():
-        w = float(find_candidate(name, "4h").weights(b, "4h").iloc[-1])
+        ws = find_candidate(name, "4h").weights(b, "4h")
+        w = float(ws.iloc[-1])
         lots = lots_for_weight(w, acc.equity_usd, price, spec)
         out["targets"][k] = {"weight": round(w, 4), "lots": lots,
-                             "below_min_lot": bool(w > 0 and lots == 0)}
+                             "below_min_lot": bool(w > 0 and lots == 0),
+                             "ema_level": ema_level, "ema_long": ema_long, **(dc if k == "D1" else {}),
+                             **(entry_point(ws, b["close"]) or {})}
     return out
 
 
@@ -189,23 +252,36 @@ def changed(prev: dict | None, cur: dict, min_change: float = 0.10) -> list[str]
 
 
 def format_msg(cur: dict, prev: dict | None, keys: list[str], feed: str, acc: Account, title: str) -> str:
-    bar = pd.Timestamp(cur["bar_ms"] + E.TF_MS["4h"], unit="ms").tz_localize("UTC").tz_convert("Asia/Seoul")
-    lines = [f"[T5 금] {title}", f"4시간봉 마감 {bar:%m-%d %H:%M} KST · 가격 {cur['price']:,.2f} ({feed})"]
+    price = cur["price"]
+    lines = [f"[T5 금] {title} · 4h 마감 {_kst(cur['bar_ms'] + E.TF_MS['4h'])}", f"현재가 {price:,.2f} ({feed.split(' ')[0]})"]
     for k in keys or list(cur["targets"]):
         t = cur["targets"][k]
         p = (prev or {}).get("targets", {}).get(k)
-        arrow = f"{p['weight'] * 100:.0f}% → " if p else ""
+        hold = t["weight"] > 0
         if t["below_min_lot"]:
-            act = f"최소 주문(0.01랏={acc.contract_size * 0.01:g}oz)보다 작아 주문 불가"
-        elif p and t["lots"] != p["lots"]:
-            d = round(t["lots"] - p["lots"], 2)
-            act = f"{'매수' if d > 0 else '매도'} {abs(d):.2f}랏 → 보유 {t['lots']:.2f}랏"
+            size = f"최소 {acc.volume_min:g}랏({acc.contract_size * acc.volume_min:g}oz) 미만 → 주문 불가"
         else:
-            act = f"보유 {t['lots']:.2f}랏" if t["lots"] > 0 else "보유 안 함(관망)"
-        lines.append(f"{k}: 목표 {arrow}{t['weight'] * 100:.0f}% · {act}")
-    lines.append(f"(목표 % = 계좌 ${acc.equity_usd:,.0f} 중 금으로 들고 있을 비율, 수익 목표 아님. "
-                 "추세가 꺾이면 매도 알림 · 주문은 MT5 앱에서 직접)")
-    return "\n".join(lines)
+            size = f"{t['lots']:.2f}랏"
+        head = f"■ {k} {'롱' if hold else '관망'} {size} · 목표 {t['weight'] * 100:.0f}%"
+        if p and t["lots"] != p["lots"]:
+            d = round(t["lots"] - p["lots"], 2)
+            head += f" · {'▲ 매수' if d > 0 else '▼ 매도'} {abs(d):.2f}랏"
+        lines.append(head)
+        # D1 = half EMA leg + half Donchian leg: show the exit of each leg that is long, the entry of each that is not.
+        legs = [("EMA", t.get("ema_long", hold), t.get("ema_level"), t.get("ema_level"))]
+        if k == "D1":
+            legs.append(("돈치안", t.get("dc_long", False), t.get("dc_exit"), t.get("dc_entry")))
+        named = len(legs) > 1
+        stops = [f"{n + ' ' if named else ''}{_px(x, 2)}" for n, on, x, _ in legs if on]
+        entries = [f"{n + ' ' if named else ''}{_px(e, 2)}" for n, on, _, e in legs if not on]
+        if hold:
+            lines.append(_entry_line(t, price, 2))
+            if stops:
+                lines.append(f"손절가 {' / '.join(stops)} (4h 종가 기준) · 목표가 없음")
+        if entries:
+            lines.append(f"{'추가 ' if hold else ''}매수 진입가 {' / '.join(entries)} 돌파 (4h 종가)")
+    lines.append(f"계좌 ${acc.equity_usd:,.0f} · 롱 전용")
+    return "\n".join(l for l in lines if l)
 
 
 # ---- notification channels (secrets come from the environment, never from the repo) ----
