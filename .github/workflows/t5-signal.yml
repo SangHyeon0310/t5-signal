@@ -32,9 +32,7 @@ jobs:
         run: python tools/t5_cloud_signal.py --state /tmp/state.json
       - name: Save state
         run: |
-          git config user.name "t5-signal"
-          git config user.email "t5-signal@users.noreply.github.com"
           d=$(mktemp -d); cp /tmp/state.json "$d/state.json"
           cd "$d" && git init -q && git checkout -q -b t5-signal-state && git add state.json
-          git commit -q -m "state $(date -u +%FT%TZ)"
+          git -c user.name="t5-signal" -c user.email="t5-signal@users.noreply.github.com" commit -q -m "state $(date -u +%FT%TZ)"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" t5-signal-state
