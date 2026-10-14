@@ -92,3 +92,15 @@ def test_small_account_message_says_below_min_lot():
     cur = {"bar_ms": T0, "price": 4000.0, "targets": {"H0": {"weight": 0.8, "lots": 0.0, "below_min_lot": True}}}
     msg = C.format_msg(cur, None, [], "GC=F", C.Account(700, 100.0), "x")
     assert "주문 불가" in msg and "1oz" in msg
+
+
+def test_start_message_when_a_channel_is_added_later(tmp_path, monkeypatch):
+    f = Feeds()
+    st = tmp_path / "s.json"
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("NTFY_TOPIC", raising=False)
+    T.run(st, CFG, f.now, dry=True, get=f)                       # first runs before any secret existed
+    monkeypatch.setenv("NTFY_TOPIC", "t5-test-topic")
+    r = T.run(st, CFG, f.now, dry=True, get=f)
+    assert len(r["sent"]) == 1 and "시작" in r["sent"][0]
+    assert T.run(st, CFG, f.now, dry=True, get=f)["sent"] == []

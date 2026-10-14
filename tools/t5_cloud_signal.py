@@ -53,8 +53,10 @@ def run(state_path: Path, cfg: dict, now_ms: int, dry: bool = False, get=C._get)
         return {"error": str(e), "sent": sent}
     prev = state.get("last")
     new_bar = not prev or cur["bar_ms"] > prev["bar_ms"]
-    if not prev:
+    channels = bool((tok and chat) or os.environ.get("NTFY_TOPIC"))
+    if not prev or (channels and not state.get("channels_ok")):      # first message once a channel is configured
         notify(C.format_msg(cur, None, [], feed, acc, "클라우드 신호 시작"), dry, sent)
+        state["channels_ok"] = channels
     elif new_bar:
         keys = C.changed(prev, cur, cfg.get("min_change", 0.10))
         if keys:
