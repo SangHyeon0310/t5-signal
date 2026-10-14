@@ -80,11 +80,14 @@ foreach ($r in $Repos) {
     $dir = Find-Folder $r.Marker $r.Venv $Roots
     if (-not $dir) { $dir = $r.Default; Say ("  " + $r.Name + " not found; fresh copy (run its SETUP once)") "Yellow" }
     if ($r.Name -eq "ST-TRA") { $TraDir = $dir }
+    if ($r.Name -eq "T5") { $T5Dir = $dir }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     Trust-Dir $dir
     Say ("[" + $r.Name + "] " + $dir) "Cyan"
     $reqFile = Join-Path $dir $r.Req
     $reqBefore = if (Test-Path $reqFile) { (Get-FileHash $reqFile).Hash } else { "" }
+    $eaDir = Join-Path $dir "indicators"
+    $eaBefore = if (Test-Path $eaDir) { (Get-ChildItem $eaDir -Filter "T5_*.mq*" | Get-FileHash | ForEach-Object { $_.Hash }) -join "" } else { "" }
     if (-not (Test-Path (Join-Path $dir ".git"))) {
         # In-place conversion: tracked files are replaced by the branch version,
         # untracked files (.venv, work-folder pointers, *.local.json) stay as they are.
@@ -109,12 +112,30 @@ foreach ($r in $Repos) {
         & $py -m pip install --disable-pip-version-check -q -r $reqFile
         Say "  python packages updated"
     }
+    # MT5 EAs: recompile into every MT5 data folder when their source changed (no click needed; MT5 reloads them).
+    $eaAfter = if (Test-Path $eaDir) { (Get-ChildItem $eaDir -Filter "T5_*.mq*" | Get-FileHash | ForEach-Object { $_.Hash }) -join "" } else { "" }
+    $inst = Join-Path $dir "scripts\install_ea.ps1"
+    if ($eaAfter -and ($eaAfter -ne $eaBefore) -and (Test-Path $inst)) {
+        try {
+            $ErrorActionPreference = "Continue"
+            $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $inst 2>&1 | Out-String
+            Add-Content -Path $Log -Value $out
+            Say ("  MT5 EAs reinstalled (exit " + $LASTEXITCODE + ", details in log)")
+        } catch { Say ("  EA reinstall failed: " + $_.Exception.Message) "Yellow" }
+        finally { $ErrorActionPreference = "Stop" }
+    }
 }
 
 # ---- 3. Daily task ----
 $Self = Join-Path $Base "tools\auto_update.ps1"
 New-Item -ItemType Directory -Force -Path (Split-Path $Self) | Out-Null
 if ($PSCommandPath -and ($PSCommandPath -ne $Self)) { Copy-Item $PSCommandPath $Self -Force }
+# Keep the daily copy current: the T5 checkout carries the same script (updated by git above, takes effect next run).
+$newer = if ($T5Dir) { Join-Path $T5Dir "scripts\auto_update.ps1" } else { "" }
+if ($newer -and (Test-Path $newer) -and ((Get-FileHash $newer).Hash -ne (Get-FileHash $Self).Hash)) {
+    Copy-Item $newer $Self -Force
+    Say "  updater refreshed from the T5 checkout"
+}
 if (-not $Quiet) {
     $act = New-ScheduledTaskAction -Execute "powershell.exe" `
         -Argument ("-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"" + $Self + "`" -Quiet")
