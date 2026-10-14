@@ -117,8 +117,10 @@ def format_crypto(cur: dict, prev: dict | None, keys: list[str], budget: float, 
         p = (prev or {}).get(k)
         arrow = f"{p['weight'] * 100:.0f}% → " if p else ""
         delta = f" ({'매수' if t['usdt'] > p['usdt'] else '매도'} 약 {abs(t['usdt'] - p['usdt']):,.0f} USDT)" if p and keys else ""
-        lines.append(f"{k} {t['price']:,.0f}: 목표 {arrow}{t['weight'] * 100:.0f}% · 보유 {t['usdt']:,.0f} USDT{delta}")
-    lines.append(f"(코인 예산 {budget:,.0f} USDT 기준 · 현물 · 주문은 거래소 앱에서 직접)")
+        state = f"{t['usdt']:,.0f} USDT어치 보유" if t["weight"] > 0 else "보유 안 함(관망)"
+        lines.append(f"{k} {t['price']:,.0f}: 목표 {arrow}{t['weight'] * 100:.0f}% · {state}{delta}")
+    lines.append(f"(목표 % = 코인 예산 {budget:,.0f} USDT 중 들고 있을 비율, 수익 목표 아님. "
+                 "고정 목표가·손절가 없이 추세가 꺾이면 %를 낮추라는 매도 알림이 옵니다. 현물 · 주문은 거래소 앱에서 직접)")
     return "\n".join(lines)
 
 
@@ -199,9 +201,10 @@ def format_msg(cur: dict, prev: dict | None, keys: list[str], feed: str, acc: Ac
             d = round(t["lots"] - p["lots"], 2)
             act = f"{'매수' if d > 0 else '매도'} {abs(d):.2f}랏 → 보유 {t['lots']:.2f}랏"
         else:
-            act = f"보유 {t['lots']:.2f}랏"
+            act = f"보유 {t['lots']:.2f}랏" if t["lots"] > 0 else "보유 안 함(관망)"
         lines.append(f"{k}: 목표 {arrow}{t['weight'] * 100:.0f}% · {act}")
-    lines.append(f"(계좌 ${acc.equity_usd:,.0f} 기준 · 주문은 MT5 앱에서 직접)")
+    lines.append(f"(목표 % = 계좌 ${acc.equity_usd:,.0f} 중 금으로 들고 있을 비율, 수익 목표 아님. "
+                 "추세가 꺾이면 매도 알림 · 주문은 MT5 앱에서 직접)")
     return "\n".join(lines)
 
 
