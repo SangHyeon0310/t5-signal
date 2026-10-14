@@ -2,7 +2,7 @@
 
 Usage: python tools/t5_cloud_signal.py --state <state.json> [--config config/signal_cloud.json] [--dry]
 Secrets (environment, set as GitHub repository secrets): TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID and/or NTFY_TOPIC.
-Telegram commands (answered at the next hourly run): /status
+Telegram commands (answered at the next hourly run): /status, /perf
 """
 from __future__ import annotations
 
@@ -73,10 +73,51 @@ def run(state_path: Path, cfg: dict, now_ms: int, dry: bool = False, get=C._get)
                      **{k: v["weight"] for k, v in cur["targets"].items()}, "feed": feed})
         state["history"] = hist[-500:]
         state["last"] = cur
+    if cfg.get("crypto_enabled", True):
+        budget = float(cfg.get("crypto_budget_usdt", 1000.0))
+        try:
+            feeds = {k: C.fetch_binance(sym, get=get, now_ms=now_ms) for k, sym in C.CRYPTO.items()}
+            cc = C.compute_crypto(feeds, now_ms, budget)
+            pc = state.get("last_crypto")
+            new_c = not pc or max(v["bar_ms"] for v in cc.values()) > max(v["bar_ms"] for v in pc.values())
+            if not pc or (channels and not state.get("crypto_channels_ok")):
+                notify(C.format_crypto(cc, None, [], budget, "코인 신호 시작"), dry, sent)
+                state["crypto_channels_ok"] = channels
+            elif new_c:
+                keys = C.changed_crypto(pc, cc, cfg.get("min_change", 0.10))
+                if keys:
+                    notify(C.format_crypto(cc, pc, keys, budget, "목표 비중 변경"), dry, sent)
+            if hb is not None and hb >= 0 and time.gmtime(now_ms / 1000).tm_hour == hb and state.get("crypto_hb_day") != day:
+                notify(C.format_crypto(cc, None, [], budget, "매일 점검: 정상 작동"), dry, sent)
+                state["crypto_hb_day"] = day
+            if any(c in ("/status", "/start") for c in cmds):
+                notify(C.format_crypto(cc, None, [], budget, "현재 상태"), dry, sent)
+            if new_c:
+                hc = state.get("history_crypto", [])
+                hc.append({"bar_ms": max(v["bar_ms"] for v in cc.values()),
+                           **{k: v["weight"] for k, v in cc.items()}, **{f"{k}_price": v["price"] for k, v in cc.items()}})
+                state["history_crypto"] = hc[-1000:]
+                state["last_crypto"] = cc
+            res_crypto = cc
+        except Exception as e:                                   # noqa: BLE001 - gold keeps working
+            res_crypto = {"error": str(e)}
+            if state.get("crypto_error_day") != day:
+                notify(f"[ST-TRA 코인] 시세를 받지 못했습니다: {e}", dry, sent)
+                state["crypto_error_day"] = day
+    else:
+        res_crypto = None
+    weekly = hb is not None and hb >= 0 and time.gmtime(now_ms / 1000).tm_hour == hb and \
+        time.gmtime(now_ms / 1000).tm_wday == 6 and state.get("weekly_day") != day
+    if weekly or any(c == "/perf" for c in cmds):
+        g = C.perf(state.get("history", []), list(cur["targets"]))
+        cpf = C.perf(state.get("history_crypto", []), list(C.CRYPTO), price_key=lambda k: f"{k}_price")
+        notify(C.format_perf(g, cpf), dry, sent)
+        if weekly:
+            state["weekly_day"] = day
     state["last_run_ms"] = now_ms
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-    return {"bar_ms": cur["bar_ms"], "feed": feed, "targets": cur["targets"], "sent": sent}
+    return {"bar_ms": cur["bar_ms"], "feed": feed, "targets": cur["targets"], "crypto": res_crypto, "sent": sent}
 
 
 def main(argv=None) -> int:

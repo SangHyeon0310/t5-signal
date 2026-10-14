@@ -1,4 +1,4 @@
-# t5-signal — 무료 금(XAUUSD) 신호 알림 (반자동, 주문 없음)
+# t5-signal — 무료 금(XAUUSD) + 코인(BTC/ETH) 신호 알림 (반자동, 주문 없음)
 
 매시간 GitHub Actions(공개 저장소라 무료)가 금 시세를 받아 T5 전략 H0/D1의 목표 비중을 계산하고,
 바뀌면 텔레그램(또는 ntfy)으로 알립니다. 주문은 MT5 앱에서 직접 넣습니다. 브로커 로그인 정보는 쓰지 않습니다.
@@ -16,3 +16,11 @@
 
 ntfy를 쓰려면 `NTFY_TOPIC` Secret에 추측하기 어려운 주제 이름을 넣습니다.
 상태 기록은 `t5-signal-state` 브랜치에 저장됩니다.
+
+## 코인 (ST-TRA 전략, 2026-10-14 추가)
+- BTC/ETH 현물: 4시간봉 EMA20/200 롱/현금, 변동성 연 40% 목표(180봉), 최대 100%. 원본: 비공개 저장소 `SangHyeon0310/ST-TRA`(사전 검증 PASS).
+- 시세: Binance 공개 데이터. 예산은 `config/signal_cloud.json`의 `crypto_budget_usdt`. 끄려면 `crypto_enabled: false`.
+
+## 텔레그램 명령 (다음 정시 실행 때 답함)
+- `/status`: 현재 금·코인 목표 비중
+- `/perf`: 클라우드 기록 시작 이후 신호를 따랐다면의 가상 수익(비용 제외)과 단순 보유 비교. 매주 일요일 07시(KST)에도 자동 발송

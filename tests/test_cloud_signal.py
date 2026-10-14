@@ -48,7 +48,7 @@ class Feeds:
 
 
 CFG = {"equity_usd": 10_000.0, "contract_size": 1.0, "volume_min": 0.01, "volume_step": 0.01, "min_change": 0.10,
-       "heartbeat_utc_hour": -1}
+       "heartbeat_utc_hour": -1, "crypto_enabled": False}
 
 
 def test_first_run_then_quiet_then_change(tmp_path):
@@ -104,3 +104,39 @@ def test_start_message_when_a_channel_is_added_later(tmp_path, monkeypatch):
     r = T.run(st, CFG, f.now, dry=True, get=f)
     assert len(r["sent"]) == 1 and "시작" in r["sent"][0]
     assert T.run(st, CFG, f.now, dry=True, get=f)["sent"] == []
+
+
+def test_crypto_sleeve_alerts_and_perf(tmp_path):
+    f = Feeds(drift=0.0006)
+    cfg = {**CFG, "crypto_enabled": True, "crypto_budget_usdt": 1000.0}
+    st = tmp_path / "c.json"
+    r = T.run(st, cfg, f.now, dry=True, get=f)
+    assert set(r["crypto"]) == {"BTC", "ETH"} and any("코인 신호 시작" in m for m in r["sent"])
+    s = json.loads(st.read_text())
+    s["last_crypto"]["BTC"]["weight"] = 0.0 if r["crypto"]["BTC"]["weight"] > 0 else 0.9
+    s["last_crypto"]["BTC"]["bar_ms"] -= 4 * H
+    s["last_crypto"]["ETH"]["bar_ms"] -= 4 * H
+    st.write_text(json.dumps(s))
+    r2 = T.run(st, cfg, f.now, dry=True, get=f)
+    assert any("목표 비중 변경" in m and "BTC" in m for m in r2["sent"])
+
+
+def test_st_tra_weight_matches_st_tra_package():
+    import importlib.util
+    import pandas as pd
+    root = Path("/home/user/ST-TRA/src")
+    if not root.exists():
+        pytest.skip("ST-TRA checkout not available")
+    sys.path.insert(0, str(root))
+    from st_fasttrack import strategies as S
+    rng = np.random.default_rng(9)
+    c = 30000 * np.exp(np.cumsum(rng.normal(0.0004, 0.01, 1500)))
+    b = pd.DataFrame({"open": c, "high": c, "low": c, "close": c}, index=np.arange(1500) * 4 * H)
+    want = S.vol_target(b, S.s_ema_cross(b, 20, 200), "4h", 0.40, 180).iloc[-1]
+    assert C.st_tra_weight(b) == pytest.approx(float(want))
+
+
+def test_perf_math():
+    hist = [{"bar_ms": 0, "price": 100.0, "H0": 1.0}, {"bar_ms": 1, "price": 110.0, "H0": 0.5}, {"bar_ms": 2, "price": 99.0, "H0": 0.0}]
+    p = C.perf(hist, ["H0"])["H0"]
+    assert p["hold"] == pytest.approx(-0.01) and p["strategy"] == pytest.approx(1.1 * 0.95 - 1)

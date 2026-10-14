@@ -3,6 +3,8 @@
   "contract_size": 100.0,
   "volume_min": 0.01,
   "volume_step": 0.01,
-  "min_change": 0.10,
-  "heartbeat_utc_hour": 22
+  "min_change": 0.1,
+  "heartbeat_utc_hour": 22,
+  "crypto_enabled": true,
+  "crypto_budget_usdt": 1000.0
 }

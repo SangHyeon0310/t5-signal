@@ -60,6 +60,68 @@ def fetch_paxg(hours: int = H1_COUNT + 2500, get=_get, now_ms: int | None = None
     return df[~df.index.duplicated(keep="last")].sort_index()
 
 
+def fetch_binance(symbol: str, hours: int = H1_COUNT + 2500, get=_get, now_ms: int | None = None) -> pd.DataFrame:
+    now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+    t, rows = now_ms - hours * 3_600_000, []
+    while t < now_ms:
+        d = json.loads(get(f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval=1h&limit=1000&startTime={t}"))
+        if not d:
+            break
+        rows += d
+        t = int(d[-1][0]) + 3_600_000
+        if len(d) < 1000:
+            break
+    df = pd.DataFrame([[int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4])] for r in rows],
+                      columns=["start_ms", "open", "high", "low", "close"]).set_index("start_ms")
+    return df[~df.index.duplicated(keep="last")].sort_index()
+
+
+# ST-TRA frozen crypto strategy (SangHyeon0310/ST-TRA research/fasttrack): ema_cross(20,200) long/flat on 4h,
+# spot exposure scaled by min(1, 0.40 / realised vol), vol = 180 x 4h log returns annualised with 6*365 bars.
+CRYPTO = {"BTC": "BTCUSDT", "ETH": "ETHUSDT"}
+
+
+def st_tra_weight(b: pd.DataFrame) -> float:
+    c = b["close"]
+    fast, slow = E.ema(c, 20), E.ema(c, 200)
+    sig = (fast > slow).astype(float)
+    rv = np.log(c).diff().rolling(180).std() * np.sqrt(6 * 365)
+    return float((sig * (0.40 / rv).clip(upper=1.0)).fillna(0.0).iloc[-1])
+
+
+def compute_crypto(feeds: dict[str, pd.DataFrame], now_ms: int, budget_usdt: float) -> dict:
+    out = {}
+    for k, h in feeds.items():
+        h = h[h.index + 3_600_000 <= now_ms].iloc[-H1_COUNT:]
+        b = E.resample(h[["open", "high", "low", "close"]], "4h")
+        b = b[b.index + E.TF_MS["4h"] <= now_ms]
+        w = st_tra_weight(b)
+        out[k] = {"weight": round(w, 4), "usdt": round(w * budget_usdt, 2), "price": float(b["close"].iloc[-1]),
+                  "bar_ms": int(b.index[-1])}
+    return out
+
+
+def changed_crypto(prev: dict | None, cur: dict, min_change: float = 0.10) -> list[str]:
+    if not prev:
+        return []
+    return [k for k, t in cur.items() if k in prev and (((prev[k]["weight"] > 0) != (t["weight"] > 0))
+                                                        or abs(t["weight"] - prev[k]["weight"]) >= min_change)]
+
+
+def format_crypto(cur: dict, prev: dict | None, keys: list[str], budget: float, title: str) -> str:
+    any_bar = max(v["bar_ms"] for v in cur.values())
+    bar = pd.Timestamp(any_bar + E.TF_MS["4h"], unit="ms").tz_localize("UTC").tz_convert("Asia/Seoul")
+    lines = [f"[ST-TRA 코인] {title}", f"4시간봉 마감 {bar:%m-%d %H:%M} KST (Binance 시세)"]
+    for k in keys or list(cur):
+        t = cur[k]
+        p = (prev or {}).get(k)
+        arrow = f"{p['weight'] * 100:.0f}% → " if p else ""
+        delta = f" ({'매수' if t['usdt'] > p['usdt'] else '매도'} 약 {abs(t['usdt'] - p['usdt']):,.0f} USDT)" if p and keys else ""
+        lines.append(f"{k} {t['price']:,.0f}: 목표 {arrow}{t['weight'] * 100:.0f}% · 보유 {t['usdt']:,.0f} USDT{delta}")
+    lines.append(f"(코인 예산 {budget:,.0f} USDT 기준 · 현물 · 주문은 거래소 앱에서 직접)")
+    return "\n".join(lines)
+
+
 def market_hours_only(h: pd.DataFrame, mask_index: pd.Index | None) -> pd.DataFrame:
     if mask_index is not None and len(mask_index):
         return h[h.index.isin(mask_index) | (h.index > mask_index.max())]   # newest hours: GC=F may lag slightly
@@ -164,3 +226,30 @@ def telegram_commands(token: str, chat_id: str, offset: int, get=_get) -> tuple[
 def send_ntfy(topic: str, text: str, post=None) -> None:
     url = f"https://ntfy.sh/{urllib.parse.quote(topic)}"
     (post or (lambda u, d: urllib.request.urlopen(urllib.request.Request(u, data=d), timeout=30).read()))(url, text.encode())
+
+
+def perf(history: list[dict], keys: list[str], price_key=lambda k: "price") -> dict:
+    """Hypothetical return of following each key's weight bar by bar (no costs) vs holding, since the first record."""
+    out = {}
+    for k in keys:
+        rows = [h for h in history if k in h and price_key(k) in h]
+        if len(rows) < 2:
+            continue
+        eq = bh = 1.0
+        for a, b in zip(rows, rows[1:]):
+            r = b[price_key(k)] / a[price_key(k)] - 1
+            eq *= 1 + a[k] * r
+            bh *= 1 + r
+        out[k] = {"strategy": round(eq - 1, 4), "hold": round(bh - 1, 4), "bars": len(rows), "since_ms": rows[0]["bar_ms"]}
+    return out
+
+
+def format_perf(gold: dict, crypto: dict) -> str:
+    lines = ["[T5·ST-TRA] 신호 성과 (클라우드 기록 시작 이후, 비용 제외 · 가상 계산)"]
+    for name, d in (("금", gold), ("코인", crypto)):
+        for k, v in d.items():
+            since = pd.Timestamp(v["since_ms"], unit="ms").strftime("%m-%d")
+            lines.append(f"{name} {k}: 신호 {v['strategy'] * 100:+.2f}% · 단순 보유 {v['hold'] * 100:+.2f}% ({since}부터 {v['bars']}봉)")
+    if len(lines) == 1:
+        lines.append("아직 기록이 2개 이상 쌓이지 않았습니다.")
+    return "\n".join(lines)
