@@ -1,0 +1,296 @@
+{
+  "history": [
+    {
+      "bar_ms": 1791950400000,
+      "price": 4155.0,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1791964800000,
+      "price": 4145.66,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1791979200000,
+      "price": 4092.72,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792022400000,
+      "price": 4162.9,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792036800000,
+      "price": 4149.54,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792051200000,
+      "price": 4147.5,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792065600000,
+      "price": 4152.99,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792080000000,
+      "price": 4177.1,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792094400000,
+      "price": 4158.19,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792108800000,
+      "price": 4184.66,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792137600000,
+      "price": 4170.39,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792152000000,
+      "price": 4167.5,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792166400000,
+      "price": 4169.3,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792195200000,
+      "price": 4165.48,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792209600000,
+      "price": 4165.05,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792224000000,
+      "price": 4164.91,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792238400000,
+      "price": 4159.13,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    },
+    {
+      "bar_ms": 1792252800000,
+      "price": 4161.79,
+      "H0": 0.0,
+      "D1": 0.0,
+      "feed": "PAXG (gold hours from GC=F)"
+    }
+  ],
+  "last": {
+    "bar_ms": 1792252800000,
+    "price": 4161.79,
+    "targets": {
+      "H0": {
+        "weight": 0.0,
+        "lots": 0.0,
+        "below_min_lot": false,
+        "ema_level": 4975.249970894864,
+        "ema_long": false
+      },
+      "D1": {
+        "weight": 0.0,
+        "lots": 0.0,
+        "below_min_lot": false,
+        "ema_level": 4975.249970894864,
+        "ema_long": false,
+        "dc_long": false,
+        "dc_exit": 4087.09,
+        "dc_entry": 4689.0
+      }
+    }
+  },
+  "last_run_ms": 1792275182837,
+  "tg_offset": 812638667,
+  "channels_ok": true,
+  "crypto_channels_ok": true,
+  "history_crypto": [
+    {
+      "bar_ms": 1791964800000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 83465.94,
+      "ETH_price": 2504.75
+    },
+    {
+      "bar_ms": 1791979200000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 81641.44,
+      "ETH_price": 2429.83
+    },
+    {
+      "bar_ms": 1792022400000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 80928.0,
+      "ETH_price": 2359.63
+    },
+    {
+      "bar_ms": 1792036800000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 81541.34,
+      "ETH_price": 2380.06
+    },
+    {
+      "bar_ms": 1792051200000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 80980.01,
+      "ETH_price": 2363.31
+    },
+    {
+      "bar_ms": 1792065600000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 82418.0,
+      "ETH_price": 2440.64
+    },
+    {
+      "bar_ms": 1792080000000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 82384.73,
+      "ETH_price": 2452.9
+    },
+    {
+      "bar_ms": 1792094400000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 82245.93,
+      "ETH_price": 2442.08
+    },
+    {
+      "bar_ms": 1792108800000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 82126.01,
+      "ETH_price": 2440.22
+    },
+    {
+      "bar_ms": 1792137600000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 82640.73,
+      "ETH_price": 2477.77
+    },
+    {
+      "bar_ms": 1792152000000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 81353.14,
+      "ETH_price": 2431.32
+    },
+    {
+      "bar_ms": 1792166400000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 81589.86,
+      "ETH_price": 2413.21
+    },
+    {
+      "bar_ms": 1792195200000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 81573.58,
+      "ETH_price": 2428.06
+    },
+    {
+      "bar_ms": 1792209600000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 81738.87,
+      "ETH_price": 2435.04
+    },
+    {
+      "bar_ms": 1792224000000,
+      "BTC": 1.0,
+      "ETH": 0.0,
+      "BTC_price": 81576.33,
+      "ETH_price": 2434.2
+    },
+    {
+      "bar_ms": 1792238400000,
+      "BTC": 0.0,
+      "ETH": 0.0,
+      "BTC_price": 81355.2,
+      "ETH_price": 2410.57
+    },
+    {
+      "bar_ms": 1792252800000,
+      "BTC": 0.0,
+      "ETH": 0.0,
+      "BTC_price": 81600.0,
+      "ETH_price": 2418.65
+    }
+  ],
+  "last_crypto": {
+    "BTC": {
+      "weight": 0.0,
+      "usdt": 0.0,
+      "price": 81600.0,
+      "bar_ms": 1792252800000,
+      "ema_level": 82920.6354671637
+    },
+    "ETH": {
+      "weight": 0.0,
+      "usdt": 0.0,
+      "price": 2418.65,
+      "bar_ms": 1792252800000,
+      "ema_level": 3573.4870532595614
+    }
+  },
+  "heartbeat_day": 20743,
+  "crypto_hb_day": 20743
+}
