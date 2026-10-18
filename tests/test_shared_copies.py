@@ -15,4 +15,5 @@ PINNED = {
 
 def test_shared_files_match_pinned_hash():
     for rel, h in PINNED.items():
-        assert hashlib.sha256((ROOT / rel).read_bytes()).hexdigest() == h, rel
+        data = (ROOT / rel).read_bytes().replace(b"\r\n", b"\n")    # Windows git checkouts use CRLF
+        assert hashlib.sha256(data).hexdigest() == h, rel
