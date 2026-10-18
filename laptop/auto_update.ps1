@@ -4,7 +4,7 @@
 #  2. turns the existing ST-TRA / T5 folders into git checkouts IN PLACE
 #     (same paths, so scheduled tasks, venvs, work folders, local switches and API key are untouched)
 #  3. registers task "ST-AutoUpdate" (daily 06:30 + at logon) that pulls both repos
-#  4. on the first (interactive) run, shows the C: drive report
+#  4. on an interactive run, shows the C: drive report when C: has < 10 GB free
 # GitHub login: the first time, a browser window asks you to sign in to GitHub once (private repos).
 param([switch]$Quiet)
 $ErrorActionPreference = "Stop"
@@ -145,8 +145,9 @@ if (-not $Quiet) {
     Say "task ST-AutoUpdate registered (daily 06:30 and at logon)" "Green"
 }
 
-# ---- 4. C: report on the interactive run ----
-if (-not $Quiet -and $TraDir) {
+# ---- 4. C: report on the interactive run, only when C: is getting full ----
+$cFree = try { (Get-PSDrive -Name C -ErrorAction Stop).Free / 1GB } catch { 999 }
+if (-not $Quiet -and $TraDir -and $cFree -lt 10) {
     $disk = Join-Path $TraDir "scripts\disk_c.ps1"
     if (Test-Path $disk) { Write-Host ""; & powershell -NoProfile -ExecutionPolicy Bypass -File $disk -Mode report }
 }
